@@ -1,0 +1,5 @@
+python-jobspy
+pyyaml
+ruamel.yaml
+httpx
+pytest

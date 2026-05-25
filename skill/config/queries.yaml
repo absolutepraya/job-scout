@@ -1,0 +1,122 @@
+# job-watcher queries — intern hunt
+hours_old: 168   # bumped from 72 to 1 week for fresher-window scoring
+
+# Minimum fit_score to include in digest. Set to 0 for no filter.
+min_score: 40
+
+# Skip postings with these workmodes. Options: onsite, remote, abroad.
+# Leave [] for no filter.
+workmode_blacklist:
+  - abroad
+  - remote
+
+limits:
+  linkedin: 25
+  indeed: 50
+  glassdoor: 25
+  google: 25
+
+limits_tier2:
+  linkedin: 10
+
+queries:
+  - "software engineer intern"
+  - "ai intern"
+  - "backend intern"
+  - "it intern"
+  - "machine learning intern"
+  - "software engineering intern"
+  - "automation engineer intern"
+  - "solutions consultant intern"
+
+locations:
+  - {name: "Jakarta, Indonesia", country_indeed: "Indonesia", is_remote: false, tier: 1}
+  # Tier-2 oversea locations removed 2026-05-22 — only Indonesia on-site is delivered.
+  # "Remote" entries also removed; workmode_blacklist now drops remote postings.
+
+# Required: title must contain at least one of these (case-insensitive)
+title_must_match_any:
+  - "intern"
+  - "internship"
+  - "magang"
+
+# Drop noise & ineligible roles (case-insensitive substring)
+title_must_not_match:
+  - "sales"
+  - "marketing intern"
+  - "marketing"
+  - "marketer"
+  - "hr intern"
+  - "finance intern"
+  - "accounting intern"
+  - "legal intern"
+  - "design intern"
+  - "graphic"
+  - "content intern"
+  - "content creator"
+  - "social media"
+  - "internal audit"
+  - "tax intern"
+  - "communications intern"
+  - "media intern"
+  - "operations intern"
+  - "business development"
+  - "bd intern"
+  - "motion designer"
+  - "fashion"
+  - "model intern"
+  - "vc intern"
+  - "venture capital"
+  - "human resources"
+  - "talent &"
+  - "climate"
+  - "people ops"
+  - "people operations"
+  - "data sci"
+  - "data ana"
+  - "creator"
+  - "strategy intern"
+  - "operation"
+  - "partnerships intern"
+  - "strategic"
+  - "people & culture"
+  - "html developer"
+  - "html/css"
+  - "wordpress"
+  - "shopify"
+  - "data annotation"
+  - "entry level"
+  - "fresher"
+
+# NEW: drop postings from spam-mill companies (case-insensitive substring)
+company_must_not_match:
+  - "Skillzenloop"
+  - "FetchJobs.co"
+  - "WebBoost"
+  - "UM IT"
+  - "LeoStoy"
+  - "ArGo Intern"
+  - "Pythrust"
+  - "Infrabyte"
+  - "Techskill"
+  - "Wake Up Whistle"
+  - "Zenithbyte"
+  - "Webs IT Solution"
+  - "DataAnnotation"
+  - "Ededge"
+  - "Skillfied Mentor"
+  - "Digital Nexus AI"
+  - "SortifAI"
+  - "Joy_"
+  - "Built By The Trades"
+  - "Stealth"
+  - "Stealth Startup"
+  - "TalentXM"
+  - "KPN Corp"
+  - "Inficore"
+  - "Faceify Labs"
+  - "Coffeee.io"
+  - "Teesta Investment"
+  - "Sparrow"
+  - "Cresta"
+  - "Latin Leap"

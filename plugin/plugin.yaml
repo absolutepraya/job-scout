@@ -1,0 +1,5 @@
+name: job-manage-commands
+description: Triage commands for job-watcher digests in #manage channel
+version: 1.0.0
+hooks:
+  - pre_gateway_dispatch
