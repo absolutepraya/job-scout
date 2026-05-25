@@ -10,8 +10,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-HERMES_PY = Path("/home/praya/.hermes/hermes-agent/venv/bin/python")
-HERMES_BIN = Path("/home/praya/.hermes/hermes-agent/hermes")
+HERMES_PY = Path.home() / ".hermes" / "hermes-agent" / "venv" / "bin" / "python"
+HERMES_BIN = Path.home() / ".hermes" / "hermes-agent" / "hermes"
 
 PROMPT = """You summarize internship job postings into 2 brief sections for a Discord card. Be terse. Max 6 words per bullet. Max 3 bullets per section. No fluff.
 
