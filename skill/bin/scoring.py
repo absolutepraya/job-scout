@@ -7,12 +7,12 @@ from typing import Optional
 
 # ---- Geo weights (substring-matched against location, case-insensitive) ----
 GEO_WEIGHTS: list[tuple[int, list[str]]] = [
-    (25, ["indonesia", "jakarta", "tangerang", "bandung", "depok", "bekasi", "bali", "surabaya"]),
-    (22, ["singapore", "malaysia", "kuala lumpur", "penang"]),
-    (18, ["japan", "tokyo", "osaka", "taiwan", "taipei", "hsinchu",
+    (35, ["indonesia", "jakarta", "tangerang", "bandung", "depok", "bekasi", "bali", "surabaya"]),
+    (30, ["singapore", "malaysia", "kuala lumpur", "penang"]),
+    (25, ["japan", "tokyo", "osaka", "taiwan", "taipei", "hsinchu",
           "china", "shanghai", "beijing", "shenzhen",
           "hong kong", "south korea", "korea", "seoul"]),
-    (14, ["united kingdom", "uk,", " uk", "england", "london", "scotland",
+    (20, ["united kingdom", "uk,", " uk", "england", "london", "scotland",
           "germany", "berlin", "munich", "hamburg",
           "netherlands", "amsterdam",
           "france", "paris", "lyon",
@@ -25,10 +25,10 @@ GEO_WEIGHTS: list[tuple[int, list[str]]] = [
           "belgium", "brussels",
           "switzerland", "zurich",
           "ireland", "dublin"]),
-    (10, ["canada", "toronto", "vancouver", "montreal",
+    (15, ["canada", "toronto", "vancouver", "montreal",
           "australia", "sydney", "melbourne",
           "new zealand", "auckland"]),
-    (5, ["united states", "usa", "us,", " us", "remote, us", "new york", "san francisco", "seattle",
+    (8, ["united states", "usa", "us,", " us", "remote, us", "new york", "san francisco", "seattle",
          "los angeles", "boston", "chicago", "austin", "atlanta"]),
 ]
 
@@ -116,19 +116,28 @@ def score_geo(location: str) -> int:
 
 
 def score_freshness(date_posted: Optional[str], now: Optional[datetime] = None) -> int:
+    """Looser windows (2026-05-26 rebalance): max 25 within 5 days, decays over a month.
+
+    When date_posted is missing/nan/unparseable, returns 12 (middle tier). JobSpy already
+    filters to hours_old=168 (1 week), so the row is recent enough — we just don't know
+    the exact day. Treating it as middle-aged avoids dropping legit postings like
+    Astra's Otopprentice IT/Intern - AOP where LinkedIn omits the date field.
+    """
     if not date_posted or date_posted == "nan" or str(date_posted).lower() == "none":
-        return 0
+        return 12
     try:
         posted = datetime.fromisoformat(str(date_posted)[:10]).replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
-        return 0
-    now = now or datetime.now(timezone.utc)
-    hours = (now - posted).total_seconds() / 3600
-    if hours < 24:
-        return 20
-    if hours < 48:
         return 12
-    if hours < 72:
+    now = now or datetime.now(timezone.utc)
+    days = (now - posted).total_seconds() / 86400
+    if days < 5:
+        return 25
+    if days < 10:
+        return 18
+    if days < 20:
+        return 12
+    if days < 30:
         return 6
     return 0
 
@@ -142,13 +151,21 @@ def score_stack(title: str, description: str) -> tuple[int, list[str]]:
     return min(len(matches) * 3, 30), matches
 
 
-def score_niche(title: str) -> int:
-    if not title:
-        return 0
-    t = title.lower()
-    for kw in NICHE_TITLE_KEYWORDS:
-        if kw in t:
-            return 15
+def score_niche(title: str, description: str = "") -> int:
+    """Niche-role bonus. Title hit = 15 (strong signal). Description-only hit = 8
+    (half weight) — catches multi-track postings like Astra's Otopprentice where
+    the title is generic but the body lists sub-roles like "AI Engineer Intern".
+    """
+    if title:
+        t = title.lower()
+        for kw in NICHE_TITLE_KEYWORDS:
+            if kw in t:
+                return 15
+    if description:
+        d = description.lower()
+        for kw in NICHE_TITLE_KEYWORDS:
+            if kw in d:
+                return 8
     return 0
 
 
@@ -209,17 +226,18 @@ def compute_fit_score(posting: dict, now: Optional[datetime] = None) -> tuple[in
     local = is_local(posting)
 
     if local:
-        # Local: no geo scoring (you're already home). Baseline 25 keeps cap at 100.
-        geo_component = 25
+        # Local: baseline 35 (2026-05-26 rebalance — bumped from 25).
+        geo_component = 35
     else:
         geo_component = score_geo(location)
 
+    # Company tier dropped 2026-05-26 — geo + freshness carry more weight now.
+    # score_niche now also scans description with half-weight (+8).
     total = (
         geo_component
         + score_freshness(date_posted, now)
         + stack_score
-        + score_niche(title)
-        + score_company(company)
+        + score_niche(title, description)
         + score_intern_desc(description)
     )
     return total, stack_matches[:3], local

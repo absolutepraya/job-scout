@@ -10,29 +10,29 @@ NOW = datetime(2026, 5, 17, 12, 0, 0, tzinfo=timezone.utc)
 
 
 def test_geo_indonesia():
-    assert score_geo("Jakarta, Jakarta, Indonesia") == 25
-    assert score_geo("Tangerang, Banten, Indonesia") == 25
+    assert score_geo("Jakarta, Jakarta, Indonesia") == 35
+    assert score_geo("Tangerang, Banten, Indonesia") == 35
 
 
 def test_geo_singapore():
-    assert score_geo("Singapore, Singapore") == 22
+    assert score_geo("Singapore, Singapore") == 30
 
 
 def test_geo_japan():
-    assert score_geo("Tokyo, Japan") == 18
+    assert score_geo("Tokyo, Japan") == 25
 
 
 def test_geo_uk():
-    assert score_geo("London, England, UK") == 14
+    assert score_geo("London, England, UK") == 20
 
 
 def test_geo_canada():
-    assert score_geo("Toronto, Ontario, Canada") == 10
+    assert score_geo("Toronto, Ontario, Canada") == 15
 
 
 def test_geo_us_low():
-    assert score_geo("Remote, US") == 5
-    assert score_geo("San Francisco, CA") == 5
+    assert score_geo("Remote, US") == 8
+    assert score_geo("San Francisco, CA") == 8
 
 
 def test_geo_unknown_zero():
@@ -41,14 +41,17 @@ def test_geo_unknown_zero():
 
 
 def test_freshness_buckets():
-    # NOW = 2026-05-17 12:00 UTC; dates parse as midnight UTC
-    assert score_freshness("2026-05-17", NOW) == 20  # 12h ago, <24h
-    assert score_freshness("2026-05-16", NOW) == 12  # 36h ago, <48h
-    assert score_freshness("2026-05-15", NOW) == 6   # 60h ago, <72h
-    assert score_freshness("2026-05-14", NOW) == 0   # 84h ago, >=72h
-    assert score_freshness("2026-05-10", NOW) == 0
-    assert score_freshness(None) == 0
-    assert score_freshness("nan") == 0
+    # NOW = 2026-05-17 12:00 UTC. Days-based tiers (2026-05-26 rebalance).
+    assert score_freshness("2026-05-17", NOW) == 25  # 0.5d ago, <5d
+    assert score_freshness("2026-05-13", NOW) == 25  # 4.5d ago, <5d
+    assert score_freshness("2026-05-12", NOW) == 18  # 5.5d ago, <10d
+    assert score_freshness("2026-05-05", NOW) == 12  # 12.5d ago, <20d
+    assert score_freshness("2026-04-25", NOW) == 6   # 22.5d ago, <30d
+    assert score_freshness("2026-03-01", NOW) == 0   # ~77d ago, >=30d
+    # Missing/unparseable date -> 12 (middle tier default; JobSpy already filters
+    # to hours_old=168 so the row is recent enough — see Astra Otopprentice case)
+    assert score_freshness(None) == 12
+    assert score_freshness("nan") == 12
 
 
 def test_stack_match_basic():
@@ -75,9 +78,16 @@ def test_stack_react_native_distinct():
 
 
 def test_niche_bonus():
+    # Title hit -> full 15
     assert score_niche("AI Engineer Intern") == 15
     assert score_niche("AI Agent Intern") == 15
     assert score_niche("Backend Intern") == 0
+    # Description-only hit -> half (8). Catches multi-track postings like Astra's
+    # Otopprentice where the body lists 'AI Engineer Intern' as a sub-role.
+    assert score_niche("Otopprentice IT / Intern", "Workshop AI Engineer Intern (Karawang)") == 8
+    assert score_niche("Backend Intern", "looking for a generative ai intern") == 8
+    # Title hit wins over description hit (no double-count)
+    assert score_niche("AI Engineer Intern", "More AI agent stuff") == 15
 
 
 def test_company_tier_s():
@@ -109,7 +119,9 @@ def test_compute_fit_score_full():
         "date_posted": "2026-05-17",
     }
     score, matches, local = compute_fit_score(posting, NOW)
-    assert score >= 75
+    # 30 geo (SG) + 25 fresh + stack (py, ts, cf, agent, rag = 15) + 15 niche
+    # = 85; company tier dropped in 2026-05-26 rebalance.
+    assert score >= 80
     assert local is False
 
 
@@ -124,8 +136,25 @@ def test_compute_fit_score_local():
     }
     score, _, local = compute_fit_score(posting, NOW)
     assert local is True
-    # 25 baseline + 20 fresh + ~9 stack (py, ts, agent) + 15 niche + 4 company = ~73
-    assert score >= 60
+    # 35 local + 25 fresh + ~9 stack (py, ts, agent) + 15 niche = ~84
+    # (company tier dropped 2026-05-26)
+    assert score >= 75
+
+
+def test_compute_fit_score_missing_date_with_desc_niche():
+    """Astra Otopprentice case: local, no date, generic title, niche in description."""
+    posting = {
+        "title": "Otopprentice IT / Intern - AOP",
+        "company": "PT Astra International Tbk",
+        "location": "Jakarta, Jakarta, Indonesia",
+        "description": "Workshop AI Engineer Intern (Karawang) — implementasi python",
+        "is_remote": False,
+        "date_posted": None,
+    }
+    score, _, local = compute_fit_score(posting, NOW)
+    # 35 local + 12 fresh default + 3 stack (py) + 8 niche-in-desc + 0 intern = 58
+    assert local is True
+    assert score >= 50
 
 
 def test_workmode_remote():

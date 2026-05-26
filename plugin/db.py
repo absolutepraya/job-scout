@@ -64,9 +64,12 @@ def open_db() -> sqlite3.Connection:
 
 
 def _migrate_seen_v2(conn: sqlite3.Connection) -> None:
-    """Add query_term, fit_score, is_local columns to seen_v2 if missing.
-    Backfill is_local from location for rows where it's still NULL.
-    Idempotent: safe to run on every open_db().
+    """Add query_term, fit_score, is_local, exp_bullets, jobdesc_bullets, filtered
+    columns to seen_v2 if missing. Backfill is_local from location for rows
+    where it's still NULL. Idempotent: safe to run on every open_db().
+
+    Keep this in sync with skill/bin/run.py:_migrate_seen_v2 — they're duplicated
+    because the plugin and skill can't import each other.
     """
     cols = {row[1] for row in conn.execute("PRAGMA table_info(seen_v2)").fetchall()}
     if "query_term" not in cols:
@@ -75,6 +78,12 @@ def _migrate_seen_v2(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE seen_v2 ADD COLUMN fit_score INTEGER")
     if "is_local" not in cols:
         conn.execute("ALTER TABLE seen_v2 ADD COLUMN is_local INTEGER")
+    if "exp_bullets" not in cols:
+        conn.execute("ALTER TABLE seen_v2 ADD COLUMN exp_bullets TEXT")
+    if "jobdesc_bullets" not in cols:
+        conn.execute("ALTER TABLE seen_v2 ADD COLUMN jobdesc_bullets TEXT")
+    if "filtered" not in cols:
+        conn.execute("ALTER TABLE seen_v2 ADD COLUMN filtered INTEGER DEFAULT 0")
     # Backfill is_local from location for any rows where it's NULL
     rows = conn.execute("SELECT rowid, location FROM seen_v2 WHERE is_local IS NULL").fetchall()
     for rowid, loc in rows:

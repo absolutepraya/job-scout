@@ -56,6 +56,35 @@ def _escape_md(s: str) -> str:
     return s
 
 
+def _live_score(stored: int | None, first_seen_ts: int | None) -> int:
+    """Recompute score at render time: replace baked-in freshness (assumed 25
+    under the post-2026-05-26 formula) with live freshness derived from first_seen.
+
+    Tiers must match scoring.score_freshness: <5d=25 / <10d=18 / <20d=12 / <30d=6 / older=0.
+    Note: postings scraped without a date_posted had freshness baked at the default
+    of 12, so this approximation slightly over-subtracts for those — accepted tradeoff.
+    """
+    if stored is None:
+        return 0
+    if first_seen_ts is None:
+        return int(stored)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    posted = datetime.fromtimestamp(int(first_seen_ts), tz=timezone.utc)
+    days = (now - posted).total_seconds() / 86400
+    if days < 5:
+        fresh = 25
+    elif days < 10:
+        fresh = 18
+    elif days < 20:
+        fresh = 12
+    elif days < 30:
+        fresh = 6
+    else:
+        fresh = 0
+    return max(0, int(stored) - 25 + fresh)
+
+
 # Colors
 COLOR_MENU = 0xFFD65A     # gold
 COLOR_SUBVIEW = 0x5865F2  # blurple
@@ -355,10 +384,11 @@ def build_dismissed_view(conn, page: int = 0) -> dict:
 # ---- History view (grouped by day) ----
 
 def _list_dates(conn) -> list[str]:
-    """Return all dates (yyyy-mm-dd) that have at least 1 row in seen_v2, newest first."""
+    """Return all dates (yyyy-mm-dd) that have at least 1 delivered (non-filtered)
+    row in seen_v2, newest first."""
     rows = conn.execute(
         "SELECT DISTINCT date(first_seen, 'unixepoch', 'localtime') AS d "
-        "FROM seen_v2 ORDER BY d DESC"
+        "FROM seen_v2 WHERE COALESCE(filtered, 0) = 0 ORDER BY d DESC"
     ).fetchall()
     return [r[0] for r in rows if r[0]]
 
@@ -400,11 +430,18 @@ def build_history_view(conn, date_arg: str = "", page_arg: str = "") -> dict:
     newer = dates[idx - 1] if idx > 0 else None
     older = dates[idx + 1] if idx + 1 < len(dates) else None
 
-    rows = conn.execute(
-        "SELECT title, company, job_url, location, is_local, query_term, fit_score "
-        "FROM seen_v2 WHERE date(first_seen, 'unixepoch', 'localtime') = ?",
+    raw_rows = conn.execute(
+        "SELECT title, company, job_url, location, is_local, query_term, fit_score, first_seen "
+        "FROM seen_v2 "
+        "WHERE date(first_seen, 'unixepoch', 'localtime') = ? "
+        "AND COALESCE(filtered, 0) = 0",
         (current,)
     ).fetchall()
+    # Recompute score with live freshness so old entries decay correctly.
+    rows = [
+        (r[0], r[1], r[2], r[3], r[4], r[5], _live_score(r[6], r[7]))
+        for r in raw_rows
+    ]
 
     try:
         d_obj = datetime.strptime(current, "%Y-%m-%d")
@@ -492,11 +529,20 @@ def build_history_view(conn, date_arg: str = "", page_arg: str = "") -> dict:
 
 
 def build_history_all_view(conn, page_arg: str = "") -> dict:
-    """All seen_v2 entries flat, sorted by fit_score DESC, paginated."""
-    rows = conn.execute(
+    """All delivered seen_v2 entries flat, sorted by live score DESC, paginated.
+    Sub-threshold (filtered=1) rows are excluded — view them with raw SQL if needed."""
+    raw_rows = conn.execute(
         "SELECT title, company, job_url, location, is_local, query_term, fit_score, first_seen "
-        "FROM seen_v2 ORDER BY fit_score DESC NULLS LAST, first_seen DESC"
+        "FROM seen_v2 WHERE COALESCE(filtered, 0) = 0"
     ).fetchall()
+    # Compute live score (decays freshness from first_seen) then sort DESC by it.
+    rows = sorted(
+        (
+            (r[0], r[1], r[2], r[3], r[4], r[5], _live_score(r[6], r[7]), r[7])
+            for r in raw_rows
+        ),
+        key=lambda x: (-(x[6] or 0), -(x[7] or 0)),
+    )
 
     total = len(rows)
     total_pages = max(1, (total + HISTORY_PAGE_SIZE - 1) // HISTORY_PAGE_SIZE)

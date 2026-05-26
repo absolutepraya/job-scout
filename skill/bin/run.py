@@ -57,7 +57,12 @@ def _is_local_str(loc):
 
 
 def _migrate_seen_v2(conn):
-    """Idempotent: add query_term/fit_score/is_local/exp_bullets/jobdesc_bullets columns + backfill is_local."""
+    """Idempotent: add query_term/fit_score/is_local/exp_bullets/jobdesc_bullets/filtered columns + backfill is_local.
+
+    The `filtered` column flags rows that passed title/company filters but scored
+    below min_score. Stored for audit (so we can SQL-query "what did we just miss?")
+    but excluded from Discord delivery and dashboard history by default.
+    """
     cols = {row[1] for row in conn.execute("PRAGMA table_info(seen_v2)").fetchall()}
     if "query_term" not in cols:
         conn.execute("ALTER TABLE seen_v2 ADD COLUMN query_term TEXT")
@@ -69,6 +74,8 @@ def _migrate_seen_v2(conn):
         conn.execute("ALTER TABLE seen_v2 ADD COLUMN exp_bullets TEXT")
     if "jobdesc_bullets" not in cols:
         conn.execute("ALTER TABLE seen_v2 ADD COLUMN jobdesc_bullets TEXT")
+    if "filtered" not in cols:
+        conn.execute("ALTER TABLE seen_v2 ADD COLUMN filtered INTEGER DEFAULT 0")
     rows = conn.execute("SELECT rowid, location FROM seen_v2 WHERE is_local IS NULL").fetchall()
     for rowid, loc in rows:
         conn.execute("UPDATE seen_v2 SET is_local = ? WHERE rowid = ?", (_is_local_str(loc), rowid))
@@ -406,6 +413,16 @@ def main():
                         continue
                     fit, stack_matches, is_local_posting = compute_fit_score(rec)
                     if fit < min_score:
+                        # Sub-threshold: log to seen_v2 with filtered=1 for audit, skip delivery.
+                        # No summarizer call (saves the hermes oneshot — these aren't going anywhere).
+                        if not args.dry_run:
+                            cur.execute(
+                                "INSERT OR IGNORE INTO seen_v2 "
+                                "(dedup_key, job_url, title, company, location, site, first_seen, query_term, fit_score, is_local, filtered) "
+                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+                                (key, url, title, company, rec.get("location"), site, int(time.time()),
+                                 query, fit, 1 if is_local_posting else 0),
+                            )
                         continue
                     rec["_query"] = query
                     rec["site"] = site
@@ -422,8 +439,8 @@ def main():
                     if not args.dry_run:
                         cur.execute(
                             "INSERT OR IGNORE INTO seen_v2 "
-                            "(dedup_key, job_url, title, company, location, site, first_seen, query_term, fit_score, is_local, exp_bullets, jobdesc_bullets) "
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            "(dedup_key, job_url, title, company, location, site, first_seen, query_term, fit_score, is_local, exp_bullets, jobdesc_bullets, filtered) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
                             (key, url, title, company, rec.get("location"), site, int(time.time()),
                              query, fit, 1 if is_local_posting else 0,
                              "\n".join(exp_b) if exp_b else None,
