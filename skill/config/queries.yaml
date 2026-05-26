@@ -2,7 +2,9 @@
 hours_old: 168   # bumped from 72 to 1 week for fresher-window scoring
 
 # Minimum fit_score to include in digest. Set to 0 for no filter.
-min_score: 40
+# Lowered 2026-05-26 from 40 → 20 to catch more borderline Indonesia-local
+# postings (Accenture/Astra/Halliburton-class with sparse signals).
+min_score: 20
 
 # Skip postings with these workmodes. Options: onsite, remote, abroad.
 # Leave [] for no filter.
