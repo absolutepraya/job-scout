@@ -274,13 +274,13 @@ def format_posting_card(posting: dict) -> dict:
     components = [{
         "type": 1,
         "components": [
-            {"type": 2, "style": 2, "custom_id": f"jm:save:{sid}", "emoji": {"name": "💾"}},
-            {"type": 2, "style": 2, "custom_id": f"jm:dismiss:{sid}", "emoji": {"name": "❌"}},
-            {"type": 2, "style": 2, "custom_id": f"jm:applied:{sid}", "emoji": {"name": "✅"}},
+            {"type": 2, "style": 2, "label": "Save",    "custom_id": f"jm:save:{sid}"},
+            {"type": 2, "style": 2, "label": "Dismiss", "custom_id": f"jm:dismiss:{sid}"},
+            {"type": 2, "style": 2, "label": "Applied", "custom_id": f"jm:applied:{sid}"},
         ]
     }]
     if url:
-        components[0]["components"].append({"type": 2, "style": 5, "url": url, "emoji": {"name": "🔗"}})
+        components[0]["components"].append({"type": 2, "style": 5, "label": "Open", "url": url})
 
     return {"embeds": [embed], "components": components}
 

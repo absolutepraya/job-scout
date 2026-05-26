@@ -86,8 +86,8 @@ def _live_score(stored: int | None, first_seen_ts: int | None) -> int:
 
 
 # Colors
-COLOR_MENU = 0xFFD65A     # gold
-COLOR_SUBVIEW = 0x5865F2  # blurple
+COLOR_MENU = 0x5C6772     # muted slate gray — neutral system tone for the main menu
+COLOR_SUBVIEW = 0x5865F2  # blurple — sub-views (stats, history, config, help)
 
 PAGE_SIZE = 15
 
@@ -95,9 +95,11 @@ PAGE_SIZE = 15
 # ---------- Button helpers ----------
 
 def _btn(label, custom_id, emoji=None, style=2, disabled=False, url=None):
+    """Build a Discord button component. The `emoji` arg is accepted for
+    backward-compat with existing callers but intentionally NOT applied —
+    we run text-label-only buttons across the dashboard.
+    """
     b = {"type": 2, "style": style, "label": label, "disabled": disabled}
-    if emoji:
-        b["emoji"] = {"name": emoji}
     if url:
         b["url"] = url
     else:
@@ -260,19 +262,19 @@ def build_menu(conn) -> dict:
     recent_applied = db_mod.list_by_status(conn, "applied", limit=5)
     counts = db_mod.count_by_status(conn)
 
-    lines = ["Quick dashboard for your job search.", ""]
+    lines = []
 
-    lines.append("**🔖 Top 5 Saved** (by score)")
+    lines.append("**Saved** (top 5 by score)")
     if not top_saved:
-        lines.append("_No saved jobs yet. Click 📋 List to browse._")
+        lines.append("_None yet._")
     else:
         for t in top_saved:
             lines.append(_short_entry(t))
 
     lines.append("")
-    lines.append("**✅ Recently Applied**")
+    lines.append("**Applied** (recent 5)")
     if not recent_applied:
-        lines.append("_No applied jobs yet._")
+        lines.append("_None yet._")
     else:
         for t in recent_applied[:5]:
             age = _humanize_age_ts(t.get("applied_at"))
@@ -281,14 +283,12 @@ def build_menu(conn) -> dict:
 
     lines.append("")
     lines.append(
-        f"📊 **{counts['saved']}** saved · "
-        f"**{counts['applied']}** applied · "
-        f"**{counts['dismissed']}** dismissed · "
-        f"**{counts['seen']}** in scrape history"
+        f"Counts: {counts['saved']} saved · {counts['applied']} applied · "
+        f"{counts['dismissed']} dismissed · {counts['seen']} in history"
     )
 
     embed = {
-        "title": "💼 Job Manager",
+        "title": "Job Manager",
         "description": _truncate_desc("\n".join(lines)),
         "color": COLOR_MENU,
     }
@@ -413,7 +413,7 @@ def build_history_view(conn, date_arg: str = "", page_arg: str = "") -> dict:
     dates = _list_dates(conn)
     if not dates:
         embed = {
-            "title": "📚 Scrape History",
+            "title": "Scrape History",
             "description": "_No scrape history yet._",
             "color": COLOR_SUBVIEW,
         }
@@ -515,7 +515,7 @@ def build_history_view(conn, date_arg: str = "", page_arg: str = "") -> dict:
             body.append(line)
 
     embed = {
-        "title": "📚 Scrape History",
+        "title": "Scrape History",
         "description": _truncate_desc("\n".join(body)),
         "color": COLOR_SUBVIEW,
     }
@@ -572,7 +572,7 @@ def build_history_all_view(conn, page_arg: str = "") -> dict:
             body.append(line)
 
     embed = {
-        "title": "📜 All History",
+        "title": "All History",
         "description": _truncate_desc("\n".join(body)),
         "color": COLOR_SUBVIEW,
     }
@@ -599,7 +599,7 @@ def build_stats_view(conn) -> dict:
         f"📚  **{counts['seen']}** total ever scraped",
     ]
     embed = {
-        "title": "📊 Stats",
+        "title": "Stats",
         "description": "\n".join(lines),
         "color": COLOR_SUBVIEW,
     }
@@ -623,7 +623,7 @@ def build_config_view(conn) -> dict:
             lines.append(f"**`{key}`**: `{v}`")
         lines.append("")
     embed = {
-        "title": "⚙️ Config (read-only)",
+        "title": "Config (read-only)",
         "description": _truncate_desc("\n".join(lines)),
         "color": COLOR_SUBVIEW,
     }
@@ -650,7 +650,7 @@ def build_help_view(conn) -> dict:
         "_Scores are snapshots at save-time._",
     ]
     embed = {
-        "title": "❓ Help",
+        "title": "Help",
         "description": "\n".join(lines),
         "color": COLOR_SUBVIEW,
     }
