@@ -271,18 +271,11 @@ def format_posting_card(posting: dict) -> dict:
     if not embed["url"]:
         del embed["url"]
 
-    components = [{
-        "type": 1,
-        "components": [
-            {"type": 2, "style": 2, "label": "Save",    "custom_id": f"jm:save:{sid}"},
-            {"type": 2, "style": 2, "label": "Dismiss", "custom_id": f"jm:dismiss:{sid}"},
-            {"type": 2, "style": 2, "label": "Applied", "custom_id": f"jm:applied:{sid}"},
-        ]
-    }]
-    if url:
-        components[0]["components"].append({"type": 2, "style": 5, "label": "Open", "url": url})
-
-    return {"embeds": [embed], "components": components}
+    # Triage buttons removed 2026-05-26 — user stopped using #manage flow.
+    # Dedup_key + sid computation above is kept (sid is unused now but harmless,
+    # and the dedup_key still drives the seen_v2 INSERT in the scrape loop).
+    # Title is still clickable since embed.url = job_url.
+    return {"embeds": [embed]}
 
 
 def format_digest(new_postings: list, total_scraped: int, locations_count: int) -> list:
